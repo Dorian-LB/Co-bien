@@ -1,18 +1,15 @@
-#include <Arduino.h>
+// #include "TouchButton.h"
+// #include "RFIDCard.h"
 
-// put function declarations here:
-int myFunction(int, int);
+// void setup() {
+//     // Crée un bouton tactile
+//     TouchButton button1(0, 128, CRGB::Red, "blink", 3, 20, 5, 3, 20, 5);
 
-void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
-}
+//     // Crée une carte RFID
+//     RFIDCard card1("123456789", "User1 Access");
+// }
 
-void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
-}
+// void loop() {
+//     // Met à jour les LEDs d'un bouton tactile
+//     button1.update();
+// }
