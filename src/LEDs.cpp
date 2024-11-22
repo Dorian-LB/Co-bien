@@ -2,7 +2,7 @@
 
 LEDGroup::LEDGroup(int *ledIndices, int ledCount, unsigned int interval)
     : indices(ledIndices), size(ledCount), color(CRGB::Black), intensity(255),
-      state(true), mode(ON), lastUpdate(0), interval(interval),
+      state(true), mode(OFF), lastUpdate(0), interval(interval),
       fadeLevel(0), fadeDirection(1) {}
 
 void LEDGroup::setColor(CRGB newColor) {
