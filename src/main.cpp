@@ -7,9 +7,9 @@
 // WiFi and MQTT Settings
 #define WIFI_SSID "Galaxy S8 Dorian"
 #define WIFI_PASSWORD "dorianlb"
-#define MQTT_SERVER "192.168.250.196"
+#define MQTT_SERVER "192.168.237.196"
 #define MQTT_PORT 1883
-#define MQTT_TOPIC "ledControl/group"
+#define MQTT_TOPIC "ledstrip/config"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
