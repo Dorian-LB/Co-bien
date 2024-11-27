@@ -7,28 +7,28 @@
 // WiFi and MQTT Settings
 #define WIFI_SSID "Galaxy S8 Dorian"
 #define WIFI_PASSWORD "dorianlb"
-#define MQTT_SERVER "192.168.237.196"
+#define MQTT_SERVER "192.168.81.196"
 #define MQTT_PORT 1883
 #define MQTT_TOPIC "ledstrip/config"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-#define NUM_LEDS 8
-#define DATA_PIN 16
+#define NUM_LEDS 9
+#define DATA_PIN 2
 #define FADING_BLINK_SPEED 50
 
 CRGB leds[NUM_LEDS];
 
-int group1[] = {0, 1};
-int group2[] = {2, 3};
-int group3[] = {4, 5};
-int group4[] = {6, 7};
+int group1[] = {0,1,2,3,4,5,6,7,8};
+// int group2[] = {2, 3};
+// int group3[] = {4, 5};
+// int group4[] = {6, 7};
 
-LEDGroup ledGroup1(group1, 2);
-LEDGroup ledGroup2(group2, 2);
-LEDGroup ledGroup3(group3, 2);
-LEDGroup ledGroup4(group4, 2);
+LEDGroup ledGroup1(group1, 9);
+// LEDGroup ledGroup2(group2, 2);
+// LEDGroup ledGroup3(group3, 2);
+// LEDGroup ledGroup4(group4, 2);
 
 void setupWiFi() {
     Serial.print("Connecting to WiFi...");
@@ -87,38 +87,38 @@ void callback(char* topic, byte* payload, unsigned int length) {
     // Update the appropriate LED group
     switch (group) {
         case 1:
-            ledGroup1.setColor(color);
-            ledGroup1.setIntensity(intensity);
+            // ledGroup1.setColor(color);
+            // ledGroup1.setIntensity(intensity);
 
             if(ledMode == FADING_BLINK){
-            ledGroup1.setMode(ledMode, FADING_BLINK_SPEED);
-            }else{ledGroup1.setMode(ledMode);
+            ledGroup1.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
+            }else{ledGroup1.configure(color,intensity,ledMode);
             }
             break;
-        case 2:
-            ledGroup2.setColor(color);
-            ledGroup2.setIntensity(intensity);
-            if(ledMode == FADING_BLINK){
-            ledGroup2.setMode(ledMode, FADING_BLINK_SPEED);
-            }else{ledGroup2.setMode(ledMode);
-            }
-            break;
-        case 3:
-            ledGroup3.setColor(color);
-            ledGroup3.setIntensity(intensity);
-            if(ledMode == FADING_BLINK){
-            ledGroup3.setMode(ledMode, FADING_BLINK_SPEED);
-            }else{ledGroup3.setMode(ledMode);
-            }
-            break;
-        case 4:
-            ledGroup4.setColor(color);
-            ledGroup4.setIntensity(intensity);
-            if(ledMode == FADING_BLINK){
-            ledGroup4.setMode(ledMode, FADING_BLINK_SPEED);
-            }else{ledGroup4.setMode(ledMode);
-            }
-            break;
+        // case 2:
+        //     ledGroup2.setColor(color);
+        //     ledGroup2.setIntensity(intensity);
+        //     if(ledMode == FADING_BLINK){
+        //     ledGroup2.setMode(ledMode, FADING_BLINK_SPEED);
+        //     }else{ledGroup2.setMode(ledMode);
+        //     }
+        //     break;
+        // case 3:
+        //     ledGroup3.setColor(color);
+        //     ledGroup3.setIntensity(intensity);
+        //     if(ledMode == FADING_BLINK){
+        //     ledGroup3.setMode(ledMode, FADING_BLINK_SPEED);
+        //     }else{ledGroup3.setMode(ledMode);
+        //     }
+        //     break;
+        // case 4:
+        //     ledGroup4.setColor(color);
+        //     ledGroup4.setIntensity(intensity);
+        //     if(ledMode == FADING_BLINK){
+        //     ledGroup4.setMode(ledMode, FADING_BLINK_SPEED);
+        //     }else{ledGroup4.setMode(ledMode);
+        //     }
+        //     break;
         default:
             Serial.println("Invalid group number.");
             break;
@@ -149,16 +149,8 @@ void setup() {
 
     FastLED.addLeds<SK6812, DATA_PIN, GRB>(leds, NUM_LEDS);
     FastLED.clear();
-
-    ledGroup1.setColor(CRGB::Red);
-    ledGroup2.setColor(CRGB::Green);
-    ledGroup3.setColor(CRGB::Blue);
-    ledGroup4.setColor(CRGB::Yellow);
-
-    ledGroup1.setMode(FADING_BLINK, FADING_BLINK_SPEED); // Fast fading blink
-    ledGroup2.setMode(BLINK);           // BLINK ON/OFF mode
-    ledGroup3.setMode(ON); // ONN
-    ledGroup4.setMode(OFF);      // OFF
+    ledGroup1.configure(CRGB::Red,255,FADING_BLINK, FADING_BLINK_SPEED);
+ 
 }
 
 void loop() {
@@ -168,7 +160,4 @@ void loop() {
     client.loop();
 
     ledGroup1.update();
-    ledGroup2.update();
-    ledGroup3.update();
-    ledGroup4.update();
 }

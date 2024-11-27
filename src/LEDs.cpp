@@ -5,23 +5,18 @@ LEDGroup::LEDGroup(int *ledIndices, int ledCount, unsigned int interval)
       state(true), mode(OFF), lastUpdate(0), interval(interval),
       fadeLevel(0), fadeDirection(1) {}
 
-void LEDGroup::setColor(CRGB newColor) {
+void LEDGroup::configure(CRGB newColor,uint8_t newIntensity,LEDMode newMode, unsigned int newInterval) {
+    //Color
     color = newColor;
-    updateLEDs();
-}
-
-void LEDGroup::setIntensity(uint8_t newIntensity) {
+    //Intensity
     intensity = newIntensity;
-    FastLED.setBrightness(intensity);
-    updateLEDs();
-}
-
-void LEDGroup::setMode(LEDMode newMode, unsigned int newInterval) {
+    //Mode
     mode = newMode;
     interval = newInterval;
     fadeLevel = 0;          // Reset fade level for fading mode
     fadeDirection = 1;      // Reset fade direction
     lastUpdate = millis();  // Reset timer
+
 }
 
 void LEDGroup::update() {
@@ -39,6 +34,7 @@ void LEDGroup::update() {
             // Set LEDs to the current fade level
             for (int i = 0; i < size; i++) {
                 leds[indices[i]] = color;
+                leds[indices[i]].subtractFromRGB(255-intensity);
                 leds[indices[i]].fadeToBlackBy(255 - fadeLevel);
             }
 
@@ -48,11 +44,15 @@ void LEDGroup::update() {
             // Apply ON/OFF state to LEDs
             for (int i = 0; i < size; i++) {
                 leds[indices[i]] = state ? color : CRGB::Black;
+                leds[indices[i]].subtractFromRGB(255-intensity);
+
             }
         } else if (mode == ON ) {
             // Apply ON state to LEDs
             for (int i = 0; i < size; i++) {
                 leds[indices[i]] =  color;
+                leds[indices[i]].subtractFromRGB(255-intensity);
+
             }
         } else if (mode == OFF ) {
             // Apply OFF state to LEDs
@@ -60,14 +60,6 @@ void LEDGroup::update() {
                 leds[indices[i]] =  CRGB::Black;
             }
         }
-
         FastLED.show();
     }
-}
-
-void LEDGroup::updateLEDs() {
-    for (int i = 0; i < size; i++) {
-        leds[indices[i]] = color;
-    }
-    FastLED.show();
 }
