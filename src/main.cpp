@@ -25,7 +25,9 @@ int group1[] = {0,1,2,3,4,5,6,7,8};
 // int group3[] = {4, 5};
 // int group4[] = {6, 7};
 
-LEDGroup ledGroup1(group1, 9);
+// // Calculate the number of elements
+// int numberOfElementsGroup1 = sizeof(group1) / sizeof(group1[0]);
+LEDGroup ledGroup1(group1, sizeof(group1) / sizeof(group1[0]));
 // LEDGroup ledGroup2(group2, 2);
 // LEDGroup ledGroup3(group3, 2);
 // LEDGroup ledGroup4(group4, 2);
@@ -87,38 +89,29 @@ void callback(char* topic, byte* payload, unsigned int length) {
     // Update the appropriate LED group
     switch (group) {
         case 1:
-            // ledGroup1.setColor(color);
-            // ledGroup1.setIntensity(intensity);
-
             if(ledMode == FADING_BLINK){
             ledGroup1.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
             }else{ledGroup1.configure(color,intensity,ledMode);
             }
             break;
         // case 2:
-        //     ledGroup2.setColor(color);
-        //     ledGroup2.setIntensity(intensity);
-        //     if(ledMode == FADING_BLINK){
-        //     ledGroup2.setMode(ledMode, FADING_BLINK_SPEED);
-        //     }else{ledGroup2.setMode(ledMode);
-        //     }
-        //     break;
+            // if(ledMode == FADING_BLINK){
+            // ledGroup1.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
+            // }else{ledGroup1.configure(color,intensity,ledMode);
+            // }
+            // break;
         // case 3:
-        //     ledGroup3.setColor(color);
-        //     ledGroup3.setIntensity(intensity);
-        //     if(ledMode == FADING_BLINK){
-        //     ledGroup3.setMode(ledMode, FADING_BLINK_SPEED);
-        //     }else{ledGroup3.setMode(ledMode);
-        //     }
-        //     break;
+            //  if(ledMode == FADING_BLINK){
+            // ledGroup1.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
+            // }else{ledGroup1.configure(color,intensity,ledMode);
+            // }
+            // break;
         // case 4:
-        //     ledGroup4.setColor(color);
-        //     ledGroup4.setIntensity(intensity);
-        //     if(ledMode == FADING_BLINK){
-        //     ledGroup4.setMode(ledMode, FADING_BLINK_SPEED);
-        //     }else{ledGroup4.setMode(ledMode);
-        //     }
-        //     break;
+            //  if(ledMode == FADING_BLINK){
+            // ledGroup1.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
+            // }else{ledGroup1.configure(color,intensity,ledMode);
+            // }
+            // break;
         default:
             Serial.println("Invalid group number.");
             break;
@@ -147,7 +140,7 @@ void setup() {
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(callback);
 
-    FastLED.addLeds<SK6812, DATA_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.addLeds<SK6812, DATA_PIN, GRB>(leds,group1[0], sizeof(group1) / sizeof(group1[0]));
     FastLED.clear();
     ledGroup1.configure(CRGB::Red,255,FADING_BLINK, FADING_BLINK_SPEED);
  

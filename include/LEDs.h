@@ -28,9 +28,6 @@ private:
 public:
     LEDGroup(int *ledIndices, int ledCount, unsigned int interval = 500);
     void configure(CRGB newColor,uint8_t newIntensity,LEDMode newMode, unsigned int newInterval = 500);
-    // void setColor(CRGB newColor);
-    // void setIntensity(uint8_t newIntensity);
-    // void setMode(LEDMode newMode, unsigned int newInterval = 500);
     void update();
 };
 
