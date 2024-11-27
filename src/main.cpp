@@ -7,28 +7,31 @@
 // WiFi and MQTT Settings
 #define WIFI_SSID "Galaxy S8 Dorian"
 #define WIFI_PASSWORD "dorianlb"
-#define MQTT_SERVER "192.168.237.196"
+#define MQTT_SERVER "192.168.81.196"
 #define MQTT_PORT 1883
 #define MQTT_TOPIC "ledstrip/config"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-#define NUM_LEDS 8
-#define DATA_PIN 16
+#define NUM_LEDS 27
+#define DATA_PIN_BUTTON1 2
+#define DATA_PIN_BUTTON2 13
+#define DATA_PIN_BUTTON3 14
+
 #define FADING_BLINK_SPEED 50
 
 CRGB leds[NUM_LEDS];
 
-int group1[] = {0, 1};
-int group2[] = {2, 3};
-int group3[] = {4, 5};
-int group4[] = {6, 7};
+int group1[] = {0, 1,2,3,4,5,6,7,8};
+int group2[] = {9,10,11,12,13,14,15,16,17};
+int group3[] = {18,19,20,21,22,23,24,25,26};
+// int group4[] = {6, 7};
 
-LEDGroup ledGroup1(group1, 2);
-LEDGroup ledGroup2(group2, 2);
-LEDGroup ledGroup3(group3, 2);
-LEDGroup ledGroup4(group4, 2);
+LEDGroup ledGroup1(group1, 9);
+LEDGroup ledGroup2(group2, 9);
+LEDGroup ledGroup3(group3, 9);
+//LEDGroup ledGroup4(group4, 2);
 
 void setupWiFi() {
     Serial.print("Connecting to WiFi...");
@@ -111,14 +114,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
             }else{ledGroup3.setMode(ledMode);
             }
             break;
-        case 4:
-            ledGroup4.setColor(color);
-            ledGroup4.setIntensity(intensity);
-            if(ledMode == FADING_BLINK){
-            ledGroup4.setMode(ledMode, FADING_BLINK_SPEED);
-            }else{ledGroup4.setMode(ledMode);
-            }
-            break;
+        // case 4:
+        //     ledGroup4.setColor(color);
+        //     ledGroup4.setIntensity(intensity);
+        //     if(ledMode == FADING_BLINK){
+        //     ledGroup4.setMode(ledMode, FADING_BLINK_SPEED);
+        //     }else{ledGroup4.setMode(ledMode);
+        //     }
+        //     break;
         default:
             Serial.println("Invalid group number.");
             break;
@@ -147,18 +150,21 @@ void setup() {
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(callback);
 
-    FastLED.addLeds<SK6812, DATA_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.addLeds<SK6812, DATA_PIN_BUTTON1, GRB>(leds, 0, 9);
+    FastLED.addLeds<SK6812, DATA_PIN_BUTTON2, GRB>(leds, 9,9);
+    FastLED.addLeds<SK6812, DATA_PIN_BUTTON3, GRB>(leds, 18,9);
+
     FastLED.clear();
 
     ledGroup1.setColor(CRGB::Red);
     ledGroup2.setColor(CRGB::Green);
     ledGroup3.setColor(CRGB::Blue);
-    ledGroup4.setColor(CRGB::Yellow);
+    // ledGroup4.setColor(CRGB::Yellow);
 
     ledGroup1.setMode(FADING_BLINK, FADING_BLINK_SPEED); // Fast fading blink
     ledGroup2.setMode(BLINK);           // BLINK ON/OFF mode
     ledGroup3.setMode(ON); // ONN
-    ledGroup4.setMode(OFF);      // OFF
+    // ledGroup4.setMode(OFF);      // OFF
 }
 
 void loop() {
@@ -170,5 +176,5 @@ void loop() {
     ledGroup1.update();
     ledGroup2.update();
     ledGroup3.update();
-    ledGroup4.update();
+    // ledGroup4.update();
 }
