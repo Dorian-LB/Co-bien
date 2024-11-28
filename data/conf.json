@@ -1,0 +1,28 @@
+{
+    "led_groups": [
+        {
+        "group_id": 1,
+        "intensity": 128,
+        "color": "#00FDFF",
+        "mode": "ON"
+        },
+        {
+        "group_id": 2,
+        "intensity": 200,
+        "color": "#FF0000",
+        "mode": "BLINK"
+        },
+        {
+        "group_id": 3,
+        "intensity": 50,
+        "color": "#FF0000",
+        "mode": "FADING_BLINK"
+        },
+        {
+        "group_id": 4,
+        "intensity": 180,
+        "color": "#FF0000",
+        "mode": "OFF"
+        }
+    ]
+}
