@@ -21,7 +21,6 @@ public:
     void initRFID();
     void handleBadgeDetection();
     void enableConfigMode();
-    bool isConfigModeActive();
     void handleMQTTMessage(String topic, DynamicJsonDocument &doc);
 
 private:

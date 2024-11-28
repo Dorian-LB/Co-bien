@@ -5,7 +5,7 @@
 
 const char* ssid = "Galaxy S8 Dorian";          
 const char* password = "dorianlb";  
-const char* mqtt_server = "192.168.81.216"; 
+const char* mqtt_server = "192.168.64.216"; 
 const char* init_topic = "rfid/ini";       
 
 WiFiClient espClient;          
@@ -83,12 +83,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   deserializeJson(doc, payload, length);
 
   if (String(topic) == init_topic) {
-    configMode = true;
     rfidManager.enableConfigMode(); // Active le mode configuration
     Serial.println("Mode configuration activé");
   }
 
-  if (rfidManager.isConfigModeActive()) {
+  if (configMode) {
     rfidManager.handleMQTTMessage(String(topic), doc); 
   }
 }

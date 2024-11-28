@@ -24,7 +24,8 @@ void RFIDManager::handleBadgeDetection() {
         } else {
             Serial.println("Échec de la publication MQTT.");
         }
-    } else {
+    } 
+    else {
         String link = "";
         if (isUIDRegistered(uid, link)) {
             Serial.println("Badge déjà enregistré.");
@@ -51,12 +52,8 @@ void RFIDManager::enableConfigMode() {
     mqttClient.subscribe(configTopic);
 }
 
-bool RFIDManager::isConfigModeActive() {
-    return configMode;
-}
-
 void RFIDManager::handleMQTTMessage(String topic, DynamicJsonDocument &doc) {
-    if (configMode && topic == configTopic) {
+    if (topic == configTopic) {
         handleConfigurationMessage(doc);
         mqttClient.unsubscribe(configTopic);
         configMode = false;
@@ -114,8 +111,8 @@ bool RFIDManager::isUIDRegistered(String uid, String &link) {
 
 void RFIDManager::handleConfigurationMessage(DynamicJsonDocument &doc) {
     if (doc.containsKey("id") && doc.containsKey("link")) {
-        String cardID = doc["id"].as<String>();
-        String link = doc["link"].as<String>();
+        String cardID = doc["id"];
+        String link = doc["link"];
 
         DynamicJsonDocument configDoc(2048);
         if (SPIFFS.exists(configFile)) {
