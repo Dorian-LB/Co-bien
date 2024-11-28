@@ -62,4 +62,6 @@ void LEDGroup::update() {
         }
         FastLED.show();
     }
+
 }
+

@@ -1,9 +1,9 @@
-#include <FastLED.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 #include <FS.h>
+#include <FastLED.h>
 
 #include "LEDs.h"
 
@@ -48,9 +48,6 @@ LEDGroup ledGroup2(group2, sizeof(group2) / sizeof(group2[0]));
 // LEDGroup ledGroup3(group3, sizeof(group3) / sizeof(group3[0]));
 // LEDGroup ledGroup4(group4, sizeof(group4) / sizeof(group4[0]));
 
-
-
-
 void setupWiFi() {
     Serial.print("Connecting to WiFi...");
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -60,8 +57,6 @@ void setupWiFi() {
     }
     Serial.println("\nWiFi connected.");
 }
-
-
 
 void reconnect() {
     while (!client.connected()) {
@@ -108,12 +103,15 @@ void saveConfiguration(DynamicJsonDocument& doc) {
 
 
 void handleConfigurationMessage(DynamicJsonDocument& message) {
+    
+    // ----Configuration of the LEDs------
   if (message.containsKey("group") && message.containsKey("intensity") && message.containsKey("color") && message.containsKey("mode")) {
+    // Extract JSON values
     int group = message["group"];
     String mode = message["mode"];
     String colorHex = message["color"];
     uint8_t intensity = message["intensity"];
-    
+    // ---- Add the message to the conf.json file------
     DynamicJsonDocument doc(2048);
     if (SPIFFS.exists(configFile)) {
       File file = SPIFFS.open(configFile, "r");
@@ -122,8 +120,6 @@ void handleConfigurationMessage(DynamicJsonDocument& message) {
         file.close();
       }
     } 
-
-    
     JsonArray ledsArray = doc["led_groups"].as<JsonArray>();
     for (JsonObject obj : ledsArray) {
       if (obj["group_id"] == group) {
@@ -135,34 +131,7 @@ void handleConfigurationMessage(DynamicJsonDocument& message) {
     }
     saveConfiguration(doc);
     Serial.println("Configuration mise à jour !");
-  }
-}
 
-void callback(char* topic, byte* payload, unsigned int length) {
-    Serial.println('Fonction callback...');
-    // Convert payload to string
-    String message = "";
-    for (unsigned int i = 0; i < length; i++) {
-        message += (char)payload[i];
-    }
-    Serial.print("Received message: ");
-    Serial.println(message);
-
-    // Parse JSON
-    DynamicJsonDocument configDoc(256);
-    DeserializationError error = deserializeJson(configDoc, message);
-    if (error) {
-        Serial.print("JSON parsing failed: ");
-        Serial.println(error.c_str());
-        return;
-    }
-
-    handleConfigurationMessage(configDoc);
-    // Extract JSON values
-    int group = configDoc["group"];
-    String mode = configDoc["mode"];
-    String colorHex = configDoc["color"];
-    uint8_t intensity = configDoc["intensity"];
 
     // Convert color from hex string to CRGB
     uint32_t colorValue = strtoul(colorHex.c_str() + 1, NULL, 16);
@@ -185,7 +154,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         ledMode = OFF; // Default mode in case of an invalid string
     }
 
-    // Update the appropriate LED group
+    // Configure the appropriate LED group
     switch (group) {
         case 1:
             if(ledMode == FADING_BLINK){
@@ -215,10 +184,30 @@ void callback(char* topic, byte* payload, unsigned int length) {
         //     Serial.println("Invalid group number.");
         //     break;
     }
+  }
 }
 
-void loadConfigurationLEDs() {
-    Serial.println('Fonction loadConfigurationLEDs...');
+void callback(char* topic, byte* payload, unsigned int length) {
+    // Convert payload to string
+    String message = "";
+    for (unsigned int i = 0; i < length; i++) {
+        message += (char)payload[i];
+    }
+    Serial.print("Received message: ");
+    Serial.println(message);
+
+    // Parse JSON
+    DynamicJsonDocument configDoc(256);
+    DeserializationError error = deserializeJson(configDoc, message);
+    if (error) {
+        Serial.print("JSON parsing failed: ");
+        Serial.println(error.c_str());
+        return;
+    }
+    handleConfigurationMessage(configDoc);
+}
+
+void setupLEDs() {
     
     DynamicJsonDocument doc(2048);
     if (SPIFFS.exists(configFile)) {
@@ -266,24 +255,36 @@ void loadConfigurationLEDs() {
                 ledGroup1.configure(color,obj["intensity"],ledMode);
             }
 
-            }else if (obj["group_id"] == 2) {
+            }
+        else if (obj["group_id"] == 2) {
 
             if(ledMode == FADING_BLINK){
                 ledGroup2.configure(color,obj["intensity"],ledMode,FADING_BLINK_SPEED);
             }else{
                 ledGroup2.configure(color,obj["intensity"],ledMode);
 
-            }
-            break;
-      }
-    FastLED.clear();
-    }
-    
-    // ledGroup2.configure(CRGB::Blue,255,ON);
-    // ledGroup3.configure(CRGB::Blue,255,ON);
-    // ledGroup4.configure(CRGB::Blue,255,ON);
-}
+            }   
+        }
+        // else if (obj["group_id"] == 3) {
 
+        //     if(ledMode == FADING_BLINK){
+        //         ledGroup3.configure(color,obj["intensity"],ledMode,FADING_BLINK_SPEED);
+        //     }else{
+        //         ledGroup3.configure(color,obj["intensity"],ledMode);
+
+        //     }   
+        // }
+        // else if (obj["group_id"] == 4) {
+
+        //     if(ledMode == FADING_BLINK){
+        //         ledGroup4.configure(color,obj["intensity"],ledMode,FADING_BLINK_SPEED);
+        //     }else{
+        //         ledGroup4.configure(color,obj["intensity"],ledMode);
+
+        //     }   
+        // }
+    } 
+}
 void setup() {
     Serial.begin(115200);
     if (!SPIFFS.begin(true)) {
@@ -293,7 +294,9 @@ void setup() {
         Serial.println("SPIFFS mounted successfully");
     }
 
-    loadConfigurationLEDs(); //Mettre le fichier de configuration dans un fichier doc et afficher son contenu dans le moniteur série
+    //Setup des leds
+    setupLEDs(); 
+
     readFileContent();
     // WiFi and MQTT setup
     setupWiFi();
