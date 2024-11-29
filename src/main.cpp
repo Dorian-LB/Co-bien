@@ -26,14 +26,14 @@ PubSubClient client(espClient);
 // //Nombre de leds pour 3 boutons
 // #define NUM_LEDS 36
 
-#define DATA_PIN_GROUP_LED1 2
-#define DATA_PIN_GROUP_LED2 13
-#define DATA_PIN_GROUP_LED3 14
-#define DATA_PIN_GROUP_LED4 0
+#define DATA_PIN_GROUP_LED1 13
+#define DATA_PIN_GROUP_LED2 14
+#define DATA_PIN_GROUP_LED3 0
+#define DATA_PIN_GROUP_LED4 26
 
 #define FADING_BLINK_SPEED 50
 
-bool configModeRFID = false; 
+bool configMode = false; 
 RFIDManager rfidManager(client, configMode); 
 
 const char* configFile = "/conf.json";
@@ -203,20 +203,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println(message);
 
     // Parse JSON
-    DynamicJsonDocument configDoc(256);
+    DynamicJsonDocument configDoc(2048);
     DeserializationError error = deserializeJson(configDoc, message);
-    if (error) {
-        Serial.print("JSON parsing failed: ");
-        Serial.println(error.c_str());
-        return;
-    }
-    if (String(topic) == init_topic) {
+    // if (error) {
+    //     Serial.print("JSON parsing failed: ");
+    //     Serial.println(error.c_str());
+    //     return;
+    // }
+    if (String(topic) == RFID_INI_TOPIC) {
     rfidManager.enableConfigMode(); // Active le mode configuration
     Serial.println("Mode configuration activé");
   }
 
-  if (configModeRFID) {
-    rfidManager.handleMQTTMessage(String(topic), doc); 
+  if (configMode) {
+    rfidManager.handleMQTTMessage(String(topic), configDoc); 
   }
 
     handleConfigurationMessage(configDoc);

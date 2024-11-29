@@ -9,7 +9,7 @@
 #include <PubSubClient.h>
 
 #define SS_PIN 21
-#define RST_PIN 14
+#define RST_PIN 2
 #define SCK_PIN 18
 #define MOSI_PIN 23
 #define MISO_PIN 19
