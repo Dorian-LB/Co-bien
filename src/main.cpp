@@ -19,10 +19,10 @@
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-#define NUM_LEDS 18
+// #define NUM_LEDS 18
 
-// //Nombre de leds pour 3 boutons
-// #define NUM_LEDS 27
+//Nombre de leds pour 3 boutons
+#define NUM_LEDS 27
 // //Nombre de leds pour 3 boutons
 // #define NUM_LEDS 36
 
@@ -41,7 +41,7 @@ const char* configFile = "/conf.json";
 CRGB leds[NUM_LEDS];
 int group1[] = {0,1,2,3,4,5,6,7,8};
 int group2[] = {9,10,11,12,13,14,15,16,17};
-// int group3[] = {18,19,20,21,22,23,24,25,26};
+int group3[] = {18,19,20,21,22,23,24,25,26};
 // int group4[] = {27,28,29,30,31,32,33,34,35};
 
 // // Calculate the number of elements
@@ -49,7 +49,7 @@ int group2[] = {9,10,11,12,13,14,15,16,17};
 
 LEDGroup ledGroup1(group1, sizeof(group1) / sizeof(group1[0]));
 LEDGroup ledGroup2(group2, sizeof(group2) / sizeof(group2[0]));
-// LEDGroup ledGroup3(group3, sizeof(group3) / sizeof(group3[0]));
+LEDGroup ledGroup3(group3, sizeof(group3) / sizeof(group3[0]));
 // LEDGroup ledGroup4(group4, sizeof(group4) / sizeof(group4[0]));
 
 void setupWiFi() {
@@ -174,12 +174,12 @@ void handleConfigurationMessage(DynamicJsonDocument& message) {
             }else{ledGroup2.configure(color,intensity,ledMode);
             }
             break;
-        // case 3:
-        //      if(ledMode == FADING_BLINK){
-        //     ledGroup3.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
-        //     }else{ledGroup3.configure(color,intensity,ledMode);
-        //     }
-        //     break;
+        case 3:
+             if(ledMode == FADING_BLINK){
+            ledGroup3.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
+            }else{ledGroup3.configure(color,intensity,ledMode);
+            }
+            break;
         // case 4:
         //      if(ledMode == FADING_BLINK){
         //     ledGroup4.configure(color,intensity,ledMode, FADING_BLINK_SPEED);
@@ -236,8 +236,8 @@ void setupLEDs() {
     //Créer les leds
     FastLED.addLeds<SK6812, DATA_PIN_GROUP_LED1, GRB>(leds,group1[0], sizeof(group1) / sizeof(group1[0]));
     FastLED.addLeds<SK6812, DATA_PIN_GROUP_LED2, GRB>(leds,group2[0], sizeof(group2) / sizeof(group2[0]));
-    // FastLED.addLeds<SK6812, DATA_PIN_GROUP_LED2, GRB>(leds,group3[0], sizeof(group3) / sizeof(group3[0]));
-    // FastLED.addLeds<SK6812, DATA_PIN_GROUP_LED2, GRB>(leds,group4[0], sizeof(group4) / sizeof(group4[0]));
+    FastLED.addLeds<SK6812, DATA_PIN_GROUP_LED3, GRB>(leds,group3[0], sizeof(group3) / sizeof(group3[0]));
+    // FastLED.addLeds<SK6812, DATA_PIN_GROUP_LED4, GRB>(leds,group4[0], sizeof(group4) / sizeof(group4[0]));
     
     JsonArray ledsArray = doc["led_groups"].as<JsonArray>();
     for (JsonObject obj : ledsArray) {
@@ -280,15 +280,15 @@ void setupLEDs() {
 
             }   
         }
-        // else if (obj["group_id"] == 3) {
+        else if (obj["group_id"] == 3) {
 
-        //     if(ledMode == FADING_BLINK){
-        //         ledGroup3.configure(color,obj["intensity"],ledMode,FADING_BLINK_SPEED);
-        //     }else{
-        //         ledGroup3.configure(color,obj["intensity"],ledMode);
+            if(ledMode == FADING_BLINK){
+                ledGroup3.configure(color,obj["intensity"],ledMode,FADING_BLINK_SPEED);
+            }else{
+                ledGroup3.configure(color,obj["intensity"],ledMode);
 
-        //     }   
-        // }
+            }   
+        }
         // else if (obj["group_id"] == 4) {
 
         //     if(ledMode == FADING_BLINK){
@@ -325,7 +325,7 @@ void loop() {
 
     ledGroup1.update();
     ledGroup2.update();
-    // ledGroup3.update();
+    ledGroup3.update();
     // ledGroup4.update();
 
     if (!client.connected()) {
