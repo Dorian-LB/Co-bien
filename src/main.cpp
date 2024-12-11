@@ -9,7 +9,7 @@
 #define CAP1188_CLK 18
 const char* ssid = "Galaxy S8 Dorian";          
 const char* password = "dorianlb";  
-const char* mqtt_server = "192.168.64.196"; 
+const char* mqtt_server = "192.168.20.196"; 
 
 // MQTT topics
 const char* topic_update = "sensor/update";
@@ -59,28 +59,46 @@ void checkWiFi() {
 }
 
 // Configure CAP1188 channel
-void configureCAP(Adafruit_CAP1188* cap, int channel, int sensitivity, int gain, int threshold) {
+void configureCAP(Adafruit_CAP1188* cap, int id, int sensitivity, int gain, int threshold) {
   // Example (replace with your actual configuration functions):
   Serial.printf("Configuring CAP: sensitivity=%d, gain=%d, threshold=%d\n", sensitivity, gain, threshold);
    // Sensitivity (write to register 0x1F)
-  uint8_t sensitivityValue = static_cast<uint8_t>(sensitivity & 0xFF);
-  cap->writeRegister(0x1F, sensitivityValue);
-  Serial.printf("Sensitivity set to 0x%02X\n", sensitivityValue);
+  uint8_t currentSensitivityValue =cap->readRegister(0x1F);
+  Serial.printf("Current sensitivity 0x%02X\n", currentSensitivityValue);
+  Serial.printf("Current sensitivity %d\n", currentSensitivityValue);
+  // currentSensitivityValue &= 0x8F; //Clear bits 4, 5 and 6
+  // currentSensitivityValue |= (sensitivity & 0x07) << 4;
+  cap->writeRegister(0x1F, sensitivity);
+  Serial.printf("Sensitivity set to 0x%02X\n", sensitivity);
+  Serial.printf("Sensitivity set to %d\n", sensitivity);
+
 
   // Gain (update bits 6 and 7 of register 0x00)
   uint8_t currentGainReg = cap->readRegister(0x00);
+  Serial.printf("current gain 0x%02X \n", currentGainReg);
+  Serial.printf("current gain %d \n", currentGainReg);
   currentGainReg &= 0x3F; // Clear bits 6 and 7
   currentGainReg |= (gain & 0x03) << 6; // Set gain bits
   cap->writeRegister(0x00, currentGainReg);
   Serial.printf("Gain set to 0x%02X (updated register 0x00)\n", currentGainReg);
+  Serial.printf("Gain set to %d (updated register 0x00)\n", currentGainReg);
+
 
   // Thresholds (write to 0x30 and 0x31 for CS1 and CS2)
   uint8_t thresholdValue = static_cast<uint8_t>(threshold & 0xFF);
+    if( id%2 != 0){
+      cap->writeRegister(0x30, thresholdValue); // CS1 threshold
+      Serial.printf("Threshold for CS1 set to 0x%02X\n", thresholdValue);
+      Serial.printf("Threshold for CS1 set to %d\n", thresholdValue);
 
-    cap->writeRegister(0x30, thresholdValue); // CS1 threshold
-    Serial.printf("Threshold for CS1 set to 0x%02X\n", thresholdValue);
-    cap->writeRegister(0x31, thresholdValue); // CS2 threshold
-    Serial.printf("Threshold for CS2 set to 0x%02X\n", thresholdValue);
+    }else{
+      cap->writeRegister(0x31, thresholdValue); // CS2 threshold
+      Serial.printf("Threshold for CS2 set to 0x%02X\n", thresholdValue);
+      Serial.printf("Threshold for CS2 set to %d \n", thresholdValue);
+
+    }
+
+
 }
 
 // Parse and handle update messages
@@ -104,9 +122,7 @@ void handleUpdateMessage(byte* payload, unsigned int length) {
   int threshold = doc["threshold"];
   Adafruit_CAP1188* cap = &cap1;
   //Adafruit_CAP1188* cap = (id <= 2) ? &cap1 : &cap2;
-  int channel = (id % 2 == 0) ? 2 : 1;
-
-  configureCAP(cap, channel, sensitivity, gain, threshold);
+  configureCAP(cap, id, sensitivity, gain, threshold);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
