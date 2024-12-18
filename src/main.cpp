@@ -5,8 +5,7 @@
 #include <Adafruit_CAP1188.h>
 #include <ArduinoJson.h>
 
-#define SS_PIN 21
-#define CAP1188_CLK 18
+
 const char* ssid = "Galaxy S8 Dorian";          
 const char* password = "dorianlb";  
 const char* mqtt_server = "192.168.20.196"; 
@@ -60,7 +59,6 @@ void checkWiFi() {
 
 // Configure CAP1188 channel
 void configureCAP(Adafruit_CAP1188* cap, int id, int sensitivity, int gain, int threshold) {
-  // Example (replace with your actual configuration functions):
   Serial.printf("Configuring CAP: sensitivity=%d, gain=%d, threshold=%d\n", sensitivity, gain, threshold);
    // Sensitivity (write to register 0x1F)
   uint8_t currentSensitivityValue =cap->readRegister(0x1F);
