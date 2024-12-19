@@ -1,7 +1,279 @@
 #include <Wire.h>
- #include <SPI.h>
-  #include <WiFi.h>
-  #include "FS.h"
+#include <SPI.h>
+#include <WiFi.h>
+#include <SPIFFS.h>
+#include <ArduinoJson.h>
+#include <PubSubClient.h>
+#include "FS.h"
+
+// Wi-Fi credentials
+const char* ssid = "Galaxy S8 Dorian";
+const char* password = "dorianlb";
+
+// MQTT broker details
+const char* mqttServer = "192.168.228.196";
+const int mqttPort = 1883;
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// MQTT topics
+#define TOPIC_CONFIG "sensor/current-configuration"
+#define TOPIC_UPDATE "sensor/update"
+
+/*TWO I2C BUSES*/
+// I2C addresses for the PIC16LF1559 devices
+#define SLAVE1_ADDRESS 0x28  // First PIC16LF1559 on I2C0 (Wire)
+#define SLAVE2_ADDRESS 0x29  // Second PIC16LF1559 on I2C1 (Wire1)
+
+// Register addresses
+#define REG_RESET_STATE        0x00  // Touch reset parameter
+#define REG_TOUCH_STATE        0x01  // Touch state parameter
+#define REG_TOUCH_DEVIATION    0x10  // Touch deviation 
+#define REG_PROXIMITY_DEVIATION    0x20  // Proximity deviation
+#define REG_TOUCH_THRESHOLD    0x30  // Touch threshold 
+#define REG_PROXIMITY_THRESHOLD    0x40  // Proximity threshold 
+#define REG_TOUCH_SCALING      0x50  // Touch deviation scaling 
+#define REG_PROXIMITY_SCALING      0x60  // Proximity deviation scaling 
+
+// Function to read a single byte from a register on a specified I2C bus
+uint8_t readRegister8(TwoWire &i2cBus, int slaveAddress, int reg) {
+  i2cBus.beginTransmission(slaveAddress);
+  i2cBus.write(reg);                  // Write the register address
+  if (i2cBus.endTransmission(false) != 0) {
+    Serial.println("Error: Failed to write register address");
+    return 0;
+  }
+  i2cBus.requestFrom(slaveAddress, 1); // Request 1 byte
+  return i2cBus.available() ? i2cBus.read() : 0;
+}
+
+// Function to read two bytes from a register on a specified I2C bus
+uint16_t readRegister16(TwoWire &i2cBus, int slaveAddress, int reg) {
+  i2cBus.beginTransmission(slaveAddress);
+  i2cBus.write(reg);                  // Write the register address
+  if (i2cBus.endTransmission(false) != 0) {
+    Serial.println("Error: Failed to write register address");
+    return 0;
+  }
+  i2cBus.requestFrom(slaveAddress, 2); // Request 2 bytes
+  uint8_t highByte = i2cBus.available() ? i2cBus.read() : 0;
+  uint8_t lowByte = i2cBus.available() ? i2cBus.read() : 0;
+  return (highByte << 8) | lowByte; // Combine high and low bytes
+}
+
+// Function to write one byte to a register on a specified I2C bus
+bool writeRegister8(TwoWire &i2cBus, int slaveAddress, int reg, uint16_t value) {
+  i2cBus.beginTransmission(slaveAddress);
+  i2cBus.write(reg);           // Write the register address
+  i2cBus.write(value);         // Write the byte value  
+  return (i2cBus.endTransmission() == 0);
+}
+
+// Function to write two bytes to a register on a specified I2C bus
+bool writeRegister16(TwoWire &i2cBus, int slaveAddress, int reg, uint16_t value) {
+  i2cBus.beginTransmission(slaveAddress);
+  i2cBus.write(reg);                  // Write the register address
+  i2cBus.write(value >> 8);           // Write high byte
+  i2cBus.write(value & 0xFF);         // Write low byte
+  return (i2cBus.endTransmission() == 0);
+}
+
+// Function to read and display data from a specific slave on a specified I2C bus
+void readAndDisplayData(TwoWire &i2cBus, uint8_t slaveAddress, const char *busName) {
+  Serial.print("Data from Slave Address: 0x");
+  Serial.print(slaveAddress, HEX);
+  Serial.print(" on ");
+  Serial.println(busName);
+
+  // Read the touch reset parameter (1 byte)
+  uint8_t resetState = readRegister8(i2cBus, slaveAddress, REG_RESET_STATE);
+  Serial.print("1. Touch Reset Parameter: ");
+  Serial.println(resetState, HEX);
+
+  // Read the touch state parameter (1 byte, bit field)
+  uint8_t touchState = readRegister8(i2cBus, slaveAddress, REG_TOUCH_STATE);
+  Serial.print("2. Touch State Parameter (Bit Field): 0x");
+  Serial.print(touchState, HEX);
+  Serial.print(" (");
+  for (int b = 7; b >= 0; b--) {
+    Serial.print((touchState >> b) & 1); // Print bit field
+    if (b > 0) Serial.print(",");
+  }
+  Serial.println(")");
+
+  // Read the touch deviation (2 bytes)
+  uint16_t touchDeviation = readRegister16(i2cBus, slaveAddress, REG_TOUCH_DEVIATION);
+  Serial.print("3. Touch Deviation (Touch Sensor): ");
+  Serial.println((uint8_t)(touchDeviation >> 8)); // High byte
+  Serial.print("4. Touch Deviation (Proximity Sensor): ");
+  Serial.println((uint8_t)(touchDeviation & 0xFF)); // Low byte
+
+  // Read the touch threshold (2 bytes)
+  uint16_t touchThreshold = readRegister16(i2cBus, slaveAddress, REG_TOUCH_THRESHOLD);
+  Serial.print("5. Touch Threshold (Touch Sensor): ");
+  Serial.println((uint8_t)(touchThreshold >> 8)); // High byte
+  Serial.print("6. Touch Threshold (Proximity Sensor): ");
+  Serial.println((uint8_t)(touchThreshold & 0xFF)); // Low byte
+
+  // Read the touch deviation scaling (2 bytes)
+  uint16_t touchScaling = readRegister16(i2cBus, slaveAddress, REG_TOUCH_SCALING);
+  Serial.print("7. Touch Deviation Scaling (Touch Sensor): ");
+  Serial.println((uint8_t)(touchScaling >> 8)); // High byte
+  Serial.print("8. Touch Deviation Scaling (Proximity Sensor): ");
+  Serial.println((uint8_t)(touchScaling & 0xFF)); // Low byte
+
+  Serial.println("-------------------------------");
+}
+// Function to send current sensor configuration via MQTT
+void sendSensorConfiguration() {
+  StaticJsonDocument<512> jsonDoc; // Adjust size based on number of sensors
+
+  // Read deviation parameters for the first PIC (touch and proximity sensors)
+  uint16_t deviationPIC1 = readRegister16(Wire, SLAVE1_ADDRESS, REG_TOUCH_DEVIATION);
+  uint8_t touchDeviationPIC1 = (deviationPIC1 >> 8) & 0xFF;  // High byte
+  uint8_t proximityDeviationPIC1 = deviationPIC1 & 0xFF;     // Low byte
+
+  // Read deviation parameters for the second PIC (touch and proximity sensors)
+  uint16_t deviationPIC2 = readRegister16(Wire1, SLAVE2_ADDRESS, REG_TOUCH_DEVIATION);
+  uint8_t touchDeviationPIC2 = (deviationPIC2 >> 8) & 0xFF;  // High byte
+  uint8_t proximityDeviationPIC2 = deviationPIC2 & 0xFF;     // Low byte
+
+  // Add data to JSON
+  jsonDoc["PIC1"]["touchDeviation"] = touchDeviationPIC1;
+  jsonDoc["PIC1"]["proximityDeviation"] = proximityDeviationPIC1;
+  jsonDoc["PIC2"]["touchDeviation"] = touchDeviationPIC2;
+  jsonDoc["PIC2"]["proximityDeviation"] = proximityDeviationPIC2;
+
+  char message[512];
+  serializeJson(jsonDoc, message);
+
+  // Publish the message to the topic
+  client.publish(TOPIC_CONFIG, message);
+  Serial.println("Published current configuration:");
+  Serial.println(message);
+}
+
+// Callback function for incoming MQTT messages
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  if (strcmp(topic, TOPIC_UPDATE) == 0) {
+    StaticJsonDocument<256> jsonDoc;
+    deserializeJson(jsonDoc, payload, length);
+
+    int sensorId = jsonDoc["sensorId"];
+    int threshold = jsonDoc["threshold"];
+    int scaling = jsonDoc["scaling"];
+
+   // Determine slave address, I2C bus, and specific sensor registers
+  uint16_t slaveAddress;
+  TwoWire *bus;
+  uint8_t regThreshold, regScaling;
+
+  if (sensorId == 1) { // Touch sensor 1
+    slaveAddress = SLAVE1_ADDRESS;
+    bus = &Wire;
+    regThreshold = REG_TOUCH_THRESHOLD;
+    regScaling = REG_TOUCH_SCALING;
+  } else if (sensorId == 2) { // Proximity sensor 1
+    slaveAddress = SLAVE1_ADDRESS;
+    bus = &Wire;
+    regThreshold = REG_PROXIMITY_THRESHOLD;
+    regScaling = REG_PROXIMITY_SCALING;
+  } else if (sensorId == 3) { // Touch sensor 2
+    slaveAddress = SLAVE2_ADDRESS;
+    bus = &Wire1;
+    regThreshold = REG_TOUCH_THRESHOLD;
+    regScaling = REG_TOUCH_SCALING;
+  } else if (sensorId == 4) { // Proximity sensor 2
+    slaveAddress = SLAVE2_ADDRESS;
+    bus = &Wire1;
+    regThreshold = REG_PROXIMITY_THRESHOLD;
+    regScaling = REG_PROXIMITY_SCALING;
+  } else {
+    Serial.println("Invalid sensorId: Must be 1, 2, 3, or 4");
+    return;
+  }
+
+    // Update touch/proximity threshold
+    if (!writeRegister8(*bus, slaveAddress, regThreshold, threshold)) {
+      Serial.println("Failed to update threshold!");
+    } else {
+      Serial.print("Threshold updated for Sensor ");
+      Serial.println(sensorId);
+    }
+
+    // Update touch/proximity scaling
+    if (!writeRegister8(*bus, slaveAddress, regScaling, scaling)) {
+      Serial.println("Failed to update scaling!");
+    } else {
+      Serial.print("Scaling updated for Sensor ");
+      Serial.println(sensorId);
+    }
+  }
+}
+
+// Function to connect to Wi-Fi
+void connectToWiFi() {
+  Serial.print("Connecting to Wi-Fi");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("Connected to Wi-Fi!");
+}
+
+// Function to connect to MQTT broker
+void connectToMQTT() {
+  while (!client.connected()) {
+    Serial.print("Connecting to MQTT...");
+    if (client.connect("ESP32Client")) {
+      Serial.println("Connected!");
+      client.subscribe(TOPIC_UPDATE); // Subscribe to the update topic
+    } else {
+      Serial.print("Failed with state ");
+      Serial.println(client.state());
+      delay(2000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);       // Initialize Serial Monitor
+
+  // Initialize both I2C buses
+  Wire.begin(21, 22);         // SDA, SCL pins for Wire (I2C0)
+  Wire1.begin(25, 26);        // SDA, SCL pins for Wire1 (I2C1)
+  Wire.setClock(100000);      // Set I2C clock speed for Wire
+  Wire1.setClock(100000);     // Set I2C clock speed for Wire1
+
+   // Initialize Wi-Fi and MQTT
+  connectToWiFi();
+  client.setServer(mqttServer, mqttPort);
+  client.setCallback(mqttCallback);
+}
+
+void loop() {
+  if (!client.connected()) {
+    connectToMQTT();
+  }
+  client.loop();
+
+  // Send sensor configuration periodically
+  static unsigned long lastMillis = 0;
+  if (millis() - lastMillis >= 200) { // 5 times per second
+    sendSensorConfiguration();
+    lastMillis = millis();
+  }
+
+  // // Read and display data from the first PIC16LF1559 on Wire (I2C0)
+  // readAndDisplayData(Wire, SLAVE1_ADDRESS, "Cancel");
+
+  // // Read and display data from the second PIC16LF1559 on Wire1 (I2C1)
+  // readAndDisplayData(Wire1, SLAVE2_ADDRESS, "Comfirm");
+
+  // delay(1000); // Delay between readings
+}
 
 /*MULTIPLE SLAVE ADRESSES & ONE I2C BUS*/
 // // I2C addresses for the PIC16LF1559 devices
@@ -201,112 +473,6 @@
 //   processPICChannel(0); // Process PIC on TCA channel 0
 //   delay(1000);          // Delay between readings
 // }
-
-/*TWO I2C BUSES*/
-// I2C addresses for the PIC16LF1559 devices
-#define SLAVE1_ADDRESS 0x28  // First PIC16LF1559 on I2C0 (Wire)
-#define SLAVE2_ADDRESS 0x29  // Second PIC16LF1559 on I2C1 (Wire1)
-
-// Register addresses
-#define REG_RESET_STATE        0x00  // Touch reset parameter
-#define REG_TOUCH_STATE        0x01  // Touch state parameter (bit field)
-#define REG_TOUCH_DEVIATION    0x10  // Touch deviation (2 bytes)
-#define REG_TOUCH_THRESHOLD    0x30  // Touch threshold (2 bytes)
-#define REG_TOUCH_SCALING      0x50  // Touch deviation scaling (2 bytes)
-
-// Function to read a single byte from a register on a specified I2C bus
-uint8_t readRegister8(TwoWire &i2cBus, int slaveAddress, int reg) {
-  i2cBus.beginTransmission(slaveAddress);
-  i2cBus.write(reg);                  // Write the register address
-  if (i2cBus.endTransmission(false) != 0) {
-    Serial.println("Error: Failed to write register address");
-    return 0;
-  }
-  i2cBus.requestFrom(slaveAddress, 1); // Request 1 byte
-  return i2cBus.available() ? i2cBus.read() : 0;
-}
-
-// Function to read two bytes from a register on a specified I2C bus
-uint16_t readRegister16(TwoWire &i2cBus, int slaveAddress, int reg) {
-  i2cBus.beginTransmission(slaveAddress);
-  i2cBus.write(reg);                  // Write the register address
-  if (i2cBus.endTransmission(false) != 0) {
-    Serial.println("Error: Failed to write register address");
-    return 0;
-  }
-  i2cBus.requestFrom(slaveAddress, 2); // Request 2 bytes
-  uint8_t highByte = i2cBus.available() ? i2cBus.read() : 0;
-  uint8_t lowByte = i2cBus.available() ? i2cBus.read() : 0;
-  return (highByte << 8) | lowByte; // Combine high and low bytes
-}
-
-// Function to read and display data from a specific slave on a specified I2C bus
-void readAndDisplayData(TwoWire &i2cBus, uint8_t slaveAddress, const char *busName) {
-  Serial.print("Data from Slave Address: 0x");
-  Serial.print(slaveAddress, HEX);
-  Serial.print(" on ");
-  Serial.println(busName);
-
-  // Read the touch reset parameter (1 byte)
-  uint8_t resetState = readRegister8(i2cBus, slaveAddress, REG_RESET_STATE);
-  Serial.print("1. Touch Reset Parameter: ");
-  Serial.println(resetState, HEX);
-
-  // Read the touch state parameter (1 byte, bit field)
-  uint8_t touchState = readRegister8(i2cBus, slaveAddress, REG_TOUCH_STATE);
-  Serial.print("2. Touch State Parameter (Bit Field): 0x");
-  Serial.print(touchState, HEX);
-  Serial.print(" (");
-  for (int b = 7; b >= 0; b--) {
-    Serial.print((touchState >> b) & 1); // Print bit field
-    if (b > 0) Serial.print(",");
-  }
-  Serial.println(")");
-
-  // Read the touch deviation (2 bytes)
-  uint16_t touchDeviation = readRegister16(i2cBus, slaveAddress, REG_TOUCH_DEVIATION);
-  Serial.print("3. Touch Deviation (Touch Sensor): ");
-  Serial.println((uint8_t)(touchDeviation >> 8)); // High byte
-  Serial.print("4. Touch Deviation (Proximity Sensor): ");
-  Serial.println((uint8_t)(touchDeviation & 0xFF)); // Low byte
-
-  // Read the touch threshold (2 bytes)
-  uint16_t touchThreshold = readRegister16(i2cBus, slaveAddress, REG_TOUCH_THRESHOLD);
-  Serial.print("5. Touch Threshold (Touch Sensor): ");
-  Serial.println((uint8_t)(touchThreshold >> 8)); // High byte
-  Serial.print("6. Touch Threshold (Proximity Sensor): ");
-  Serial.println((uint8_t)(touchThreshold & 0xFF)); // Low byte
-
-  // Read the touch deviation scaling (2 bytes)
-  uint16_t touchScaling = readRegister16(i2cBus, slaveAddress, REG_TOUCH_SCALING);
-  Serial.print("7. Touch Deviation Scaling (Touch Sensor): ");
-  Serial.println((uint8_t)(touchScaling >> 8)); // High byte
-  Serial.print("8. Touch Deviation Scaling (Proximity Sensor): ");
-  Serial.println((uint8_t)(touchScaling & 0xFF)); // Low byte
-
-  Serial.println("-------------------------------");
-}
-
-void setup() {
-  Serial.begin(115200);       // Initialize Serial Monitor
-
-  // Initialize both I2C buses
-  Wire.begin(21, 22);         // SDA, SCL pins for Wire (I2C0)
-  Wire1.begin(25, 26);        // SDA, SCL pins for Wire1 (I2C1)
-  Wire.setClock(100000);      // Set I2C clock speed for Wire
-  Wire1.setClock(100000);     // Set I2C clock speed for Wire1
-}
-
-void loop() {
-  // Read and display data from the first PIC16LF1559 on Wire (I2C0)
-  readAndDisplayData(Wire, SLAVE1_ADDRESS, "Wire");
-
-  // Read and display data from the second PIC16LF1559 on Wire1 (I2C1)
-  readAndDisplayData(Wire1, SLAVE2_ADDRESS, "Wire1");
-
-  delay(1000); // Delay between readings
-}
-
 
 /*I2C Scanner*/
 // void setup() {
