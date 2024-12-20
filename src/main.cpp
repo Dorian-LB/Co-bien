@@ -4,7 +4,7 @@
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
-#include "FS.h"
+#include <FS.h>
 
 // Wi-Fi credentials
 const char* ssid = "Galaxy S8 Dorian";
@@ -19,7 +19,7 @@ PubSubClient client(espClient);
 
 // MQTT topics
 #define TOPIC_CONFIG "sensor/current-configuration"
-#define TOPIC_UPDATE "sensor/update"
+#define TOPIC_SENSOR_UPDATE "sensor/update"
 
 /*TWO I2C BUSES*/
 // I2C addresses for the PIC16LF1559 devices
@@ -30,11 +30,12 @@ PubSubClient client(espClient);
 #define REG_RESET_STATE        0x00  // Touch reset parameter
 #define REG_TOUCH_STATE        0x01  // Touch state parameter
 #define REG_TOUCH_DEVIATION    0x10  // Touch deviation 
-#define REG_PROXIMITY_DEVIATION    0x20  // Proximity deviation
 #define REG_TOUCH_THRESHOLD    0x30  // Touch threshold 
-#define REG_PROXIMITY_THRESHOLD    0x40  // Proximity threshold 
 #define REG_TOUCH_SCALING      0x50  // Touch deviation scaling 
-#define REG_PROXIMITY_SCALING      0x60  // Proximity deviation scaling 
+
+// Path for configuration file
+const char* configFile = "/conf.json";
+
 
 // Function to read a single byte from a register on a specified I2C bus
 uint8_t readRegister8(TwoWire &i2cBus, int slaveAddress, int reg) {
@@ -77,6 +78,23 @@ bool writeRegister16(TwoWire &i2cBus, int slaveAddress, int reg, uint16_t value)
   i2cBus.write(value >> 8);           // Write high byte
   i2cBus.write(value & 0xFF);         // Write low byte
   return (i2cBus.endTransmission() == 0);
+}
+
+
+// Function to print the content of the JSON file on the serial monitor
+void readFileContent(){
+  File file = SPIFFS.open(configFile, "r");
+  if(!file) {
+    Serial.println("Echec de l'ouverture du fichier pour la lecture");
+    return;
+  }
+
+  Serial.println("contenu du fichier de configuration:");
+  while (file.available()){
+    Serial.write(file.read());
+  }
+  file.close();
+  Serial.println("");
 }
 
 // Function to read and display data from a specific slave on a specified I2C bus
@@ -125,8 +143,71 @@ void readAndDisplayData(TwoWire &i2cBus, uint8_t slaveAddress, const char *busNa
 
   Serial.println("-------------------------------");
 }
-// Function to send current sensor configuration via MQTT
-void sendSensorConfiguration() {
+
+// Function to update sensor configuration on the PIC via I2C
+void updateSensorConfiguration(int sensorId, uint16_t scaling, uint16_t threpshold) {
+  
+  // Determine slave address, I2C bus, and specific sensor registers based on sensorId
+  uint16_t slaveAddress;
+  TwoWire *bus;
+
+  if (sensorId == 1 || sensorId == 2) { // PIC1
+    slaveAddress = SLAVE1_ADDRESS;
+    bus = &Wire;
+  } else if (sensorId == 3 || sensorId == 4) { // PIC2
+    slaveAddress = SLAVE2_ADDRESS;
+    bus = &Wire1;
+ 
+  } else {
+    Serial.println("Invalid sensorId: Must be 1, 2, 3, or 4");
+    return;
+  }
+  if(sensorId%2 == 0){
+    threshold = (threshold & 0x00FF);
+    scaling = (scaling & 0x00FF);
+  }else{
+    threshold = (threshold & 0xFF00);
+    scaling = (scaling & 0xFF00);
+  }
+  // Update threshold value
+  if (!writeRegister8(*bus, slaveAddress, REG_TOUCH_THRESHOLD, threshold)) {
+    Serial.println("Failed to update threshold!");
+  } else {
+    Serial.print("Threshold updated for Sensor ");
+    Serial.println(sensorId);
+  }
+
+  // Update scaling value
+  if (!writeRegister8(*bus, slaveAddress, REG_TOUCH_SCALING, scaling)) {
+    Serial.println("Failed to update scaling!");
+  } else {
+    Serial.print("Scaling updated for Sensor ");
+    Serial.println(sensorId);
+  }
+  readAndDisplayData(*bus, slaveAddress, "Current configuration");
+}
+
+
+// Function to read the sensor configuration from the JSON file
+bool setupSensors() {
+  DynamicJsonDocument doc(2048);
+  if(SPIFFS.exists(configFile)) {
+    File file = SPIFFS.open(configFile, "r");
+    if (file) {
+        deserializeJson(doc,file);
+      }
+  }
+  JsonArray sensorsArray = doc["sensors"].as<JsonArray>();
+  for (JsonObject obj : sensorsArray) {
+      updateSensorConfiguration(obj["sensor_id"], obj["scaling"], obj["threshold"]);
+    }
+  return true;
+  }
+
+
+
+// Function to send current sensors deviations via MQTT
+void sendSensorDeviation() {
   StaticJsonDocument<512> jsonDoc; // Adjust size based on number of sensors
 
   // Read deviation parameters for the first PIC (touch and proximity sensors)
@@ -153,62 +234,68 @@ void sendSensorConfiguration() {
   Serial.println("Published current configuration:");
   Serial.println(message);
 }
+//Function to save the configuration to the JSON file
+void saveConfiguration(DynamicJsonDocument& doc){
+  File file = SPIFFS.open(configFile, "w");
+  if (file){
+    serializeJson(doc, file);
+    file.close();
+    Serial.println("configuration sauvegardée.");
+    readFileContent();
+  }else{
+    Serial.println("Echec de l'ouverture du fichier pour l'écriture.");
+  }
+}
+
+// Function to store the configuration changes in a doc file
+void handleSensorConfigurationMessage(DynamicJsonDocument& message) {
+  int sensor_id = message["sensorId"];
+  int scaling = message["scaling"];
+  int threshold = message["threshold"];
+
+  DynamicJsonDocument doc(2048);
+  if(SPIFFS.exists(configFile)) {
+    File file = SPIFFS.open(configFile, "r");
+    if (file){
+      deserializeJson(doc, file);
+      file.close();
+    }
+  }
+  Serial.println(sensor_id);
+  JsonArray sensorsArray = doc["sensors"].as<JsonArray>();
+  for (JsonObject obj : sensorsArray){
+    if (obj["sensor_id"] == sensor_id){
+      Serial.println(sensor_id);
+      Serial.println(threshold);
+      Serial.println(scaling);
+      obj["threshold"] = threshold;
+      obj["scaling"] = scaling;
+      Serial.println(int(obj["threshold"]));
+      Serial.println(int(obj["scaling"]));
+      break;
+    }
+  }
+  saveConfiguration(doc);
+   updateSensorConfiguration(sensor_id, scaling, threshold);
+}
 
 // Callback function for incoming MQTT messages
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  if (strcmp(topic, TOPIC_UPDATE) == 0) {
-    StaticJsonDocument<256> jsonDoc;
-    deserializeJson(jsonDoc, payload, length);
-
-    int sensorId = jsonDoc["sensorId"];
-    int threshold = jsonDoc["threshold"];
-    int scaling = jsonDoc["scaling"];
-
-   // Determine slave address, I2C bus, and specific sensor registers
-  uint16_t slaveAddress;
-  TwoWire *bus;
-  uint8_t regThreshold, regScaling;
-
-  if (sensorId == 1) { // Touch sensor 1
-    slaveAddress = SLAVE1_ADDRESS;
-    bus = &Wire;
-    regThreshold = REG_TOUCH_THRESHOLD;
-    regScaling = REG_TOUCH_SCALING;
-  } else if (sensorId == 2) { // Proximity sensor 1
-    slaveAddress = SLAVE1_ADDRESS;
-    bus = &Wire;
-    regThreshold = REG_PROXIMITY_THRESHOLD;
-    regScaling = REG_PROXIMITY_SCALING;
-  } else if (sensorId == 3) { // Touch sensor 2
-    slaveAddress = SLAVE2_ADDRESS;
-    bus = &Wire1;
-    regThreshold = REG_TOUCH_THRESHOLD;
-    regScaling = REG_TOUCH_SCALING;
-  } else if (sensorId == 4) { // Proximity sensor 2
-    slaveAddress = SLAVE2_ADDRESS;
-    bus = &Wire1;
-    regThreshold = REG_PROXIMITY_THRESHOLD;
-    regScaling = REG_PROXIMITY_SCALING;
-  } else {
-    Serial.println("Invalid sensorId: Must be 1, 2, 3, or 4");
-    return;
+void callback(char* topic, byte* payload, unsigned int length) {
+  //Convert payload to string
+  String message = "";
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
   }
+  Serial.print("received message: ");
+  Serial.println(message);
 
-    // Update touch/proximity threshold
-    if (!writeRegister8(*bus, slaveAddress, regThreshold, threshold)) {
-      Serial.println("Failed to update threshold!");
-    } else {
-      Serial.print("Threshold updated for Sensor ");
-      Serial.println(sensorId);
-    }
+  //Parse JSON
+  DynamicJsonDocument configDoc(2048);
+  DeserializationError error = deserializeJson(configDoc, message);
 
-    // Update touch/proximity scaling
-    if (!writeRegister8(*bus, slaveAddress, regScaling, scaling)) {
-      Serial.println("Failed to update scaling!");
-    } else {
-      Serial.print("Scaling updated for Sensor ");
-      Serial.println(sensorId);
-    }
+  if (strcmp(topic, TOPIC_SENSOR_UPDATE) == 0) {
+    Serial.println("topic verification");
+    handleSensorConfigurationMessage(configDoc);
   }
 }
 
@@ -229,7 +316,7 @@ void connectToMQTT() {
     Serial.print("Connecting to MQTT...");
     if (client.connect("ESP32Client")) {
       Serial.println("Connected!");
-      client.subscribe(TOPIC_UPDATE); // Subscribe to the update topic
+      client.subscribe(TOPIC_SENSOR_UPDATE); // Subscribe to the update topic
     } else {
       Serial.print("Failed with state ");
       Serial.println(client.state());
@@ -241,16 +328,33 @@ void connectToMQTT() {
 void setup() {
   Serial.begin(115200);       // Initialize Serial Monitor
 
-  // Initialize both I2C buses
+    // Initialize both I2C buses
   Wire.begin(21, 22);         // SDA, SCL pins for Wire (I2C0)
   Wire1.begin(25, 26);        // SDA, SCL pins for Wire1 (I2C1)
   Wire.setClock(100000);      // Set I2C clock speed for Wire
   Wire1.setClock(100000);     // Set I2C clock speed for Wire1
 
+  // Initialize SPIFFS
+  if (!SPIFFS.begin()) {
+    Serial.println("SPIFFS initialization failed");
+    return;
+  }else{
+    Serial.println("SPIFFS mounted successfully");
+  }
+  readFileContent();
+  // Load configuration from file
+  if (!setupSensors()) {
+    Serial.println("Using default configuration");
+  } else{
+    Serial.println("Using configuration from conf.json file");
+  }
+
+
+
    // Initialize Wi-Fi and MQTT
   connectToWiFi();
   client.setServer(mqttServer, mqttPort);
-  client.setCallback(mqttCallback);
+  client.setCallback(callback);
 }
 
 void loop() {
@@ -262,7 +366,7 @@ void loop() {
   // Send sensor configuration periodically
   static unsigned long lastMillis = 0;
   if (millis() - lastMillis >= 200) { // 5 times per second
-    sendSensorConfiguration();
+    sendSensorDeviation();
     lastMillis = millis();
   }
 
