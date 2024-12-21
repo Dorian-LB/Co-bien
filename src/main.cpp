@@ -145,47 +145,42 @@ void readAndDisplayData(TwoWire &i2cBus, uint8_t slaveAddress, const char *busNa
 }
 
 // Function to update sensor configuration on the PIC via I2C
-void updateSensorConfiguration(int sensorId, uint16_t scaling, uint16_t threpshold) {
-  
-  // Determine slave address, I2C bus, and specific sensor registers based on sensorId
+void updateSensorConfiguration(int sensorId, uint16_t scaling, uint16_t threshold) {
   uint16_t slaveAddress;
   TwoWire *bus;
 
-  if (sensorId == 1 || sensorId == 2) { // PIC1
+  // Determine the slave address and bus
+  if (sensorId == 1 || sensorId == 2) {
     slaveAddress = SLAVE1_ADDRESS;
     bus = &Wire;
-  } else if (sensorId == 3 || sensorId == 4) { // PIC2
+  } else if (sensorId == 3 || sensorId == 4) {
     slaveAddress = SLAVE2_ADDRESS;
     bus = &Wire1;
- 
   } else {
     Serial.println("Invalid sensorId: Must be 1, 2, 3, or 4");
     return;
   }
-  if(sensorId%2 == 0){
-    threshold = (threshold & 0x00FF);
-    scaling = (scaling & 0x00FF);
-  }else{
-    threshold = (threshold & 0xFF00);
-    scaling = (scaling & 0xFF00);
-  }
-  // Update threshold value
-  if (!writeRegister8(*bus, slaveAddress, REG_TOUCH_THRESHOLD, threshold)) {
+
+  // Write the combined threshold value
+  if (!writeRegister16(*bus, slaveAddress, REG_TOUCH_THRESHOLD, threshold)) {
     Serial.println("Failed to update threshold!");
   } else {
     Serial.print("Threshold updated for Sensor ");
     Serial.println(sensorId);
   }
 
-  // Update scaling value
-  if (!writeRegister8(*bus, slaveAddress, REG_TOUCH_SCALING, scaling)) {
+  // Write the combined scaling value
+  if (!writeRegister16(*bus, slaveAddress, REG_TOUCH_SCALING, scaling)) {
     Serial.println("Failed to update scaling!");
   } else {
     Serial.print("Scaling updated for Sensor ");
     Serial.println(sensorId);
   }
+
+  // Read back and display the updated data for confirmation
   readAndDisplayData(*bus, slaveAddress, "Current configuration");
 }
+
 
 
 // Function to read the sensor configuration from the JSON file
@@ -249,35 +244,42 @@ void saveConfiguration(DynamicJsonDocument& doc){
 
 // Function to store the configuration changes in a doc file
 void handleSensorConfigurationMessage(DynamicJsonDocument& message) {
-  int sensor_id = message["sensorId"];
-  int scaling = message["scaling"];
-  int threshold = message["threshold"];
+  int sensor_id = message["PIC"];
+  uint8_t touchThreshold = message["touchThreshold"];
+  uint8_t proximityThreshold = message["proximityThreshold"];
+  uint8_t touchScaling = message["touchScaling"];
+  uint8_t proximityScaling = message["proximityScaling"];
 
+  // Combine the threshold and scaling values
+  uint16_t threshold = (touchThreshold << 8) | proximityThreshold;
+  uint16_t scaling = (touchScaling << 8) | proximityScaling;
+
+  // Update the configuration in the JSON file
   DynamicJsonDocument doc(2048);
-  if(SPIFFS.exists(configFile)) {
+  if (SPIFFS.exists(configFile)) {
     File file = SPIFFS.open(configFile, "r");
-    if (file){
+    if (file) {
       deserializeJson(doc, file);
       file.close();
     }
   }
-  Serial.println(sensor_id);
+
   JsonArray sensorsArray = doc["sensors"].as<JsonArray>();
-  for (JsonObject obj : sensorsArray){
-    if (obj["sensor_id"] == sensor_id){
-      Serial.println(sensor_id);
-      Serial.println(threshold);
-      Serial.println(scaling);
-      obj["threshold"] = threshold;
-      obj["scaling"] = scaling;
-      Serial.println(int(obj["threshold"]));
-      Serial.println(int(obj["scaling"]));
+  for (JsonObject obj : sensorsArray) {
+    if (obj["sensor_id"] == sensor_id) {
+      obj["threshold"] = threshold; // Save combined threshold
+      obj["scaling"] = scaling;     // Save combined scaling
       break;
     }
   }
+
+  // Save updated configuration
   saveConfiguration(doc);
-   updateSensorConfiguration(sensor_id, scaling, threshold);
+
+  // Update the sensor configuration
+  updateSensorConfiguration(sensor_id, scaling, threshold);
 }
+
 
 // Callback function for incoming MQTT messages
 void callback(char* topic, byte* payload, unsigned int length) {
