@@ -11,7 +11,7 @@ const char* ssid = "Galaxy S8 Dorian";
 const char* password = "dorianlb";
 
 // MQTT broker details
-const char* mqttServer = "192.168.228.196";
+const char* mqttServer = "192.168.250.196";
 const int mqttPort = 1883;
 
 WiFiClient espClient;
@@ -145,19 +145,19 @@ void readAndDisplayData(TwoWire &i2cBus, uint8_t slaveAddress, const char *busNa
 }
 
 // Function to update sensor configuration on the PIC via I2C
-void updateSensorConfiguration(int sensorId, uint16_t scaling, uint16_t threshold) {
+void updateSensorConfiguration(int PIC_id, uint16_t scaling, uint16_t threshold) {
   uint16_t slaveAddress;
   TwoWire *bus;
 
   // Determine the slave address and bus
-  if (sensorId == 1 || sensorId == 2) {
+  if (PIC_id == 1) {
     slaveAddress = SLAVE1_ADDRESS;
     bus = &Wire;
-  } else if (sensorId == 3 || sensorId == 4) {
+  } else if (PIC_id == 2) {
     slaveAddress = SLAVE2_ADDRESS;
     bus = &Wire1;
   } else {
-    Serial.println("Invalid sensorId: Must be 1, 2, 3, or 4");
+    Serial.println("Invalid PIC_id: Must be 1 or 2");
     return;
   }
 
@@ -165,16 +165,16 @@ void updateSensorConfiguration(int sensorId, uint16_t scaling, uint16_t threshol
   if (!writeRegister16(*bus, slaveAddress, REG_TOUCH_THRESHOLD, threshold)) {
     Serial.println("Failed to update threshold!");
   } else {
-    Serial.print("Threshold updated for Sensor ");
-    Serial.println(sensorId);
+    Serial.print("Threshold updated for PIC ");
+    Serial.println(PIC_id);
   }
 
   // Write the combined scaling value
   if (!writeRegister16(*bus, slaveAddress, REG_TOUCH_SCALING, scaling)) {
     Serial.println("Failed to update scaling!");
   } else {
-    Serial.print("Scaling updated for Sensor ");
-    Serial.println(sensorId);
+    Serial.print("Scaling updated for PIC ");
+    Serial.println(PIC_id);
   }
 
   // Read back and display the updated data for confirmation
@@ -183,7 +183,7 @@ void updateSensorConfiguration(int sensorId, uint16_t scaling, uint16_t threshol
 
 
 
-// Function to read the sensor configuration from the JSON file
+// Function to read the sensor configuration from the JSON file and calls the updateSensorConfiguration function
 bool setupSensors() {
   DynamicJsonDocument doc(2048);
   if(SPIFFS.exists(configFile)) {
@@ -194,7 +194,16 @@ bool setupSensors() {
   }
   JsonArray sensorsArray = doc["sensors"].as<JsonArray>();
   for (JsonObject obj : sensorsArray) {
-      updateSensorConfiguration(obj["sensor_id"], obj["scaling"], obj["threshold"]);
+      uint8_t touchThreshold = obj["touchThreshold"];
+      uint8_t proximityThreshold = obj["proximityThreshold"];
+      uint8_t touchScaling = obj["touchScaling"];
+      uint8_t proximityScaling = obj["proximityScaling"];
+
+      // Combine the threshold and scaling values
+      uint16_t threshold = (touchThreshold << 8) | proximityThreshold;
+      uint16_t scaling = (touchScaling << 8) | proximityScaling;
+
+      updateSensorConfiguration(obj["PIC_id"], scaling, threshold);
     }
   return true;
   }
@@ -244,7 +253,7 @@ void saveConfiguration(DynamicJsonDocument& doc){
 
 // Function to store the configuration changes in a doc file
 void handleSensorConfigurationMessage(DynamicJsonDocument& message) {
-  int sensor_id = message["PIC"];
+  int PIC_id = message["PIC"];
   uint8_t touchThreshold = message["touchThreshold"];
   uint8_t proximityThreshold = message["proximityThreshold"];
   uint8_t touchScaling = message["touchScaling"];
@@ -266,9 +275,11 @@ void handleSensorConfigurationMessage(DynamicJsonDocument& message) {
 
   JsonArray sensorsArray = doc["sensors"].as<JsonArray>();
   for (JsonObject obj : sensorsArray) {
-    if (obj["sensor_id"] == sensor_id) {
-      obj["threshold"] = threshold; // Save combined threshold
-      obj["scaling"] = scaling;     // Save combined scaling
+    if (obj["PIC_id"] == PIC_id) {
+      obj["touchThreshold"] = touchThreshold; // Save touch threshold
+      obj["touchScaling"] = touchScaling;     // Save touch scaling
+      obj["proximityThreshold"] = proximityThreshold; // Save proximity threshold
+      obj["proximityScaling"] = proximityScaling;     // Save proximity scaling
       break;
     }
   }
@@ -277,7 +288,7 @@ void handleSensorConfigurationMessage(DynamicJsonDocument& message) {
   saveConfiguration(doc);
 
   // Update the sensor configuration
-  updateSensorConfiguration(sensor_id, scaling, threshold);
+  updateSensorConfiguration(PIC_id, scaling, threshold);
 }
 
 

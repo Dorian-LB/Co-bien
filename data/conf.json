@@ -1,24 +1,18 @@
 {
   "sensors":[
     {
-      "sensor_id": 1,
-      "scaling": 2,
-      "threshold": 100
+      "PIC_id": 1,
+      "touchThreshold": 100,
+      "proximityThreshold": 100,
+      "touchScaling": 2,
+      "proximityScaling": 2
     },
     {
-      "sensor_id": 2,
-      "scaling": 0,
-      "threshold": 100
-    },
-     {
-      "sensor_id": 3,
-      "scaling": 2,
-      "threshold": 100
-    },
-     {
-      "sensor_id": 4,
-      "scaling": 0,
-      "threshold": 100
+      "PIC_id": 2,
+      "touchThreshold": 100,
+      "proximityThreshold": 100,
+      "touchScaling": 2,
+      "proximityScaling": 2
     }
   ]   
 }
