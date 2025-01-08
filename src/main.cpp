@@ -11,6 +11,22 @@
 #include "LEDs.h"
 #include "sensors.h"
 
+#define LEDS_TOPIC "ledstrip/config"
+#define RFID_INI_TOPIC "rfid/ini"
+
+// #define NUM_LEDS 18
+//Nombre de leds pour 3 boutons
+#define NUM_LEDS 27
+// //Nombre de leds pour 3 boutons
+// #define NUM_LEDS 36
+
+#define DATA_PIN_GROUP_LED1 2
+#define DATA_PIN_GROUP_LED2 13
+#define DATA_PIN_GROUP_LED3 14
+#define DATA_PIN_GROUP_LED4 0
+
+#define FADING_BLINK_SPEED 50
+
 // Wi-Fi credentials
 const char* ssid = "Galaxy S8 Dorian";
 const char* password = "dorianlb";
@@ -22,32 +38,17 @@ const int mqttPort = 1883;
 // Path for configuration file
 const char* configFile = "/conf.json";
 
-
-#define LEDS_TOPIC "ledstrip/config"
-#define RFID_INI_TOPIC "rfid/ini"
+bool configMode = false; 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 SensorsManager sensors(client);
-
-// #define NUM_LEDS 18
-
-//Nombre de leds pour 3 boutons
-#define NUM_LEDS 27
-// //Nombre de leds pour 3 boutons
-// #define NUM_LEDS 36
-
-#define DATA_PIN_GROUP_LED1 13
-#define DATA_PIN_GROUP_LED2 14
-#define DATA_PIN_GROUP_LED3 0
-#define DATA_PIN_GROUP_LED4 26
-
-#define FADING_BLINK_SPEED 50
-bool configMode = false; 
 RFIDManager rfidManager(client, configMode); 
+
+
 CRGB leds[NUM_LEDS];
 int group1[] = {0,1,2,3,4,5,6,7,8};
-int group2[] = {9,10,11,12,13,14,15,16,17};
+int group2[] = {9,10,11,12,13,14,15,16,17};   
 int group3[] = {18,19,20,21,22,23,24,25,26};
 // int group4[] = {27,28,29,30,31,32,33,34,35};
 
@@ -61,7 +62,7 @@ LEDGroup ledGroup3(group3, sizeof(group3) / sizeof(group3[0]));
 
 void setupWiFi() {
     Serial.print("Connecting to WiFi...");
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
         delay(1000);
         Serial.print(".");
@@ -114,10 +115,7 @@ void saveConfiguration(DynamicJsonDocument& doc) {
   }
 }
 
-void handleConfigurationMessage(DynamicJsonDocument& message) {
-    
-    // ----Configuration of the LEDs------
-  if (message.containsKey("group") && message.containsKey("intensity") && message.containsKey("color") && message.containsKey("mode")) {
+void handleLedConfigurationMessage(DynamicJsonDocument& message) {
     // Extract JSON values
     int group = message["group"];
     String mode = message["mode"];
@@ -197,7 +195,6 @@ void handleConfigurationMessage(DynamicJsonDocument& message) {
         //     break;
     }
   }
-}
 
 void callback(char* topic, byte* payload, unsigned int length) {
   // Convert payload to string
@@ -224,8 +221,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (configMode) {
     rfidManager.handleMQTTMessage(String(topic), configDoc); 
   }
-
-    handleConfigurationMessage(configDoc);
+      // ----Configuration of the LEDs------
+  if (strcmp(topic, LEDS_TOPIC) == 0){
+    handleLedConfigurationMessage(configDoc);
+  }
 
   if (strcmp(topic, TOPIC_SENSOR_UPDATE) == 0) {
     Serial.println("topic verification");
@@ -314,9 +313,6 @@ void setupLEDs() {
 void setup() {
   Serial.begin(115200);  
 
-  // Initialize both I2C buses
-  sensors.initializeI2C();
-
   // Initialize SPIFFS
   if (!SPIFFS.begin()) {
     Serial.println("SPIFFS initialization failed");
@@ -325,19 +321,16 @@ void setup() {
     Serial.println("SPIFFS mounted successfully");
   }
   readFileContent();
-  // Load configuration from file
-  if (!sensors.setupSensors()) {
-    Serial.println("Using default configuration");
-  } else{
-    Serial.println("Using configuration from conf.json file");
-  }
-
-  setupWiFi();          
   
+  setupWiFi();          
   client.setServer(mqttServer, mqttPort);
   client.setCallback(callback);
+
+  sensors.initializeI2C();   // Initialize both I2C buses
   sensors.setupSensors();
   rfidManager.initRFID(); // Initialisation RFID
+  setupLEDs();
+
 }
 
 void loop() {
@@ -359,43 +352,4 @@ void loop() {
   }
 
   rfidManager.handleBadgeDetection(); 
-}
-
-
-
-void reconnectMQTT() {
-  while (!client.connected()) {
-    Serial.print("Connexion au serveur MQTT...");
-    if (client.connect("ESP32Client")) {
-      Serial.println("Connecté !");
-      client.subscribe(init_topic); // S'abonner au topic "rfid/ini"
-      Serial.println("Abonné au topic: rfid/ini");
-    } else {
-      Serial.print("Échec, rc=");
-      Serial.print(client.state());
-      Serial.println(". Nouvelle tentative dans 5 secondes...");
-      delay(5000);
-    }
-  }
-}
-
-void checkWiFi() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Wi-Fi déconnecté. Tentative de reconnexion...");
-    setupWiFi();
-  }
-}
-
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  DynamicJsonDocument doc(1024);
-  deserializeJson(doc, payload, length);
-
-  if (String(topic) == init_topic) {
-    rfidManager.enableConfigMode(); // Active le mode configuration
-    Serial.println("Mode configuration activé");
-  }
-
-  if (configMode) {
-    rfidManager.handleMQTTMessage(String(topic), doc); 
-  }
 }
