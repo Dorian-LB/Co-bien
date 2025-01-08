@@ -82,7 +82,7 @@ void RFIDManager::saveConfiguration(DynamicJsonDocument &doc) {
     if (file) {
         serializeJson(doc, file);
         file.close();
-        Serial.println("Configuration sauvegardée.");
+        Serial.println("Configuration de la carte RFID sauvegardée.");
         readFileContent();
     } else {
         Serial.println("Échec de l'ouverture du fichier pour l'écriture.");

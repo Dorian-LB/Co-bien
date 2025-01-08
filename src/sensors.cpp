@@ -18,6 +18,7 @@ bool SensorsManager::setupSensors() {
     File file = SPIFFS.open(configFile, "r");
     if (file) {
         deserializeJson(doc,file);
+        file.close();
       }
   }
   JsonArray sensorsArray = doc["sensors"].as<JsonArray>();

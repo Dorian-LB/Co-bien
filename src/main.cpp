@@ -108,7 +108,7 @@ void saveConfiguration(DynamicJsonDocument& doc) {
   if (file) {
     serializeJson(doc, file);
     file.close();
-    Serial.println("Configuration sauvegardée.");
+    Serial.println("Configuration des LEDs sauvegardée dans conf.json.");
     readFileContent();
   } else {
     Serial.println("Échec de l'ouverture du fichier pour l'écriture.");
