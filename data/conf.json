@@ -26,5 +26,24 @@
         "color": "#FF0000",
         "mode": "OFF"
         }
-    ]
+    ],
+    "sensors":[
+    {
+      "PIC_id": 1,
+      "touchThreshold": 100,
+      "proximityThreshold": 100,
+      "touchScaling": 2,
+      "proximityScaling": 2
+    },
+    {
+      "PIC_id": 2,
+      "touchThreshold": 100,
+      "proximityThreshold": 100,
+      "touchScaling": 2,
+      "proximityScaling": 2
+    }
+  ]  
 }
+   
+
+  
