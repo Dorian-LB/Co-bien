@@ -11,7 +11,8 @@
 #include "LEDs.h"
 #include "sensors.h"
 
-#define LEDS_TOPIC "ledstrip/config"
+#define LEDS_CONFIG_TOPIC "ledstrip/config"
+#define LEDS_UPDATE_TOPIC "ledstrip/update"
 #define RFID_INI_TOPIC "rfid/ini"
 
 // #define NUM_LEDS 18
@@ -32,7 +33,7 @@ const char* ssid = "Galaxy S8 Dorian";
 const char* password = "dorianlb";
 
 // MQTT broker details
-const char* mqttServer = "192.168.250.196";
+const char* mqttServer = "192.168.172.196";
 const int mqttPort = 1883;
 
 // Path for configuration file
@@ -77,7 +78,8 @@ void connectToMQTT() {
     if (client.connect("ESP32Client")) {
       Serial.println("Connected!");
       client.subscribe(TOPIC_SENSOR_UPDATE); // Subscribe to the update topic
-      client.subscribe(LEDS_TOPIC);
+      client.subscribe(LEDS_CONFIG_TOPIC);
+      client.subscribe(LEDS_UPDATE_TOPIC);
       client.subscribe(RFID_INI_TOPIC); // S'abonner au topic "rfid/ini"
     } else {
       Serial.print("Failed with state ");
@@ -115,33 +117,35 @@ void saveConfiguration(DynamicJsonDocument& doc) {
   }
 }
 
-void handleLedConfigurationMessage(DynamicJsonDocument& message) {
+void handleLedConfigurationMessage(char* topic, DynamicJsonDocument& message) {
     // Extract JSON values
     int group = message["group"];
     String mode = message["mode"];
     String colorHex = message["color"];
     uint8_t intensity = message["intensity"];
-    // ---- Add the message to the conf.json file------
-    DynamicJsonDocument doc(2048);
-    if (SPIFFS.exists(configFile)) {
-      File file = SPIFFS.open(configFile, "r");
-      if (file) {
-        deserializeJson(doc, file);
-        file.close();
-      }
-    } 
-    JsonArray ledsArray = doc["led_groups"].as<JsonArray>();
-    for (JsonObject obj : ledsArray) {
-      if (obj["group_id"] == group) {
-        obj["mode"] = mode;
-        obj["color"] = colorHex;
-        obj["intensity"] = intensity;
-        break;
-      }
-    }
-    saveConfiguration(doc);
-    Serial.println("Configuration mise à jour !");
 
+    if (strcmp(topic, LEDS_CONFIG_TOPIC) == 0){
+      // ---- Add the message to the conf.json file------
+      DynamicJsonDocument doc(2048);
+      if (SPIFFS.exists(configFile)) {
+        File file = SPIFFS.open(configFile, "r");
+        if (file) {
+          deserializeJson(doc, file);
+          file.close();
+        }
+      } 
+      JsonArray ledsArray = doc["led_groups"].as<JsonArray>();
+      for (JsonObject obj : ledsArray) {
+        if (obj["group_id"] == group) {
+          obj["mode"] = mode;
+          obj["color"] = colorHex;
+          obj["intensity"] = intensity;
+          break;
+        }
+      }
+      saveConfiguration(doc);
+      Serial.println("Configuration mise à jour !");
+    }
 
     // Convert color from hex string to CRGB
     uint32_t colorValue = strtoul(colorHex.c_str() + 1, NULL, 16);
@@ -222,9 +226,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
     rfidManager.handleMQTTMessage(String(topic), configDoc); 
   }
       // ----Configuration of the LEDs------
-  if (strcmp(topic, LEDS_TOPIC) == 0){
-    handleLedConfigurationMessage(configDoc);
+  if (strcmp(topic, LEDS_CONFIG_TOPIC) == 0 || strcmp(topic, LEDS_UPDATE_TOPIC) == 0){
+    handleLedConfigurationMessage(topic, configDoc);
   }
+
 
   if (strcmp(topic, TOPIC_SENSOR_UPDATE) == 0) {
     Serial.println("topic verification");
@@ -343,13 +348,14 @@ void loop() {
     connectToMQTT();
   }
   client.loop();
+  
+  rfidManager.handleBadgeDetection(); 
 
   // Send sensor configuration periodically
   static unsigned long lastMillis = 0;
-  if (millis() - lastMillis >= 200) { // 5 times per second
+  if (millis() - lastMillis >= 333) { // 3 times per second
     sensors.sendSensorDeviation();
     lastMillis = millis();
   }
 
-  rfidManager.handleBadgeDetection(); 
 }

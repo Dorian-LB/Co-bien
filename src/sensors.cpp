@@ -69,7 +69,7 @@ void SensorsManager::handleSensorConfigurationMessage(DynamicJsonDocument& messa
     }
   }
 
-  // Save updated configuration
+  // Save updated configuration in the json conf file
   saveConfiguration(doc);
 
   // Update the sensor configuration
@@ -78,23 +78,41 @@ void SensorsManager::handleSensorConfigurationMessage(DynamicJsonDocument& messa
 
 // Function to send current sensors deviations via MQTT
 void SensorsManager::sendSensorDeviation() {
+
   StaticJsonDocument<512> jsonDoc; // Adjust size based on number of sensors
 
   // Read deviation parameters for the first PIC (touch and proximity sensors)
   uint16_t deviationPIC1 = readRegister16(Wire, SLAVE1_ADDRESS, REG_TOUCH_DEVIATION);
   uint8_t touchDeviationPIC1 = (deviationPIC1 >> 8) & 0xFF;  // High byte
   uint8_t proximityDeviationPIC1 = deviationPIC1 & 0xFF;     // Low byte
+  
+  uint8_t PIC1States = readRegister8(Wire, SLAVE1_ADDRESS, REG_TOUCH_STATE); 
+  // Extract the touchState (LSB)
+  uint8_t touchStatePIC1 = PIC1States & 0x01; // Mask the LSB (bit 0)
+  // Extract the proximityState (second bit)
+  uint8_t proximityStatePIC1 = (PIC1States >> 1) & 0x01; // Shift right by 1 and mask bit 0
 
   // Read deviation parameters for the second PIC (touch and proximity sensors)
   uint16_t deviationPIC2 = readRegister16(Wire1, SLAVE2_ADDRESS, REG_TOUCH_DEVIATION);
   uint8_t touchDeviationPIC2 = (deviationPIC2 >> 8) & 0xFF;  // High byte
   uint8_t proximityDeviationPIC2 = deviationPIC2 & 0xFF;     // Low byte
 
+  uint8_t PIC2States = readRegister8(Wire1, SLAVE2_ADDRESS, REG_TOUCH_STATE); 
+  // Extract the touchState (LSB)
+  uint8_t touchStatePIC2 = PIC2States & 0x01; // Mask the LSB (bit 0)
+  // Extract the proximityState (second bit)
+  uint8_t proximityStatePIC2 = (PIC2States >> 1) & 0x01; // Shift right by 1 and mask bit 0
+
+
   // Add data to JSON
   jsonDoc["PIC1"]["touchDeviation"] = touchDeviationPIC1;
   jsonDoc["PIC1"]["proximityDeviation"] = proximityDeviationPIC1;
+  jsonDoc["PIC1"]["touchState"] = touchStatePIC1;
+  jsonDoc["PIC1"]["proximityState"] = proximityStatePIC1;
   jsonDoc["PIC2"]["touchDeviation"] = touchDeviationPIC2;
   jsonDoc["PIC2"]["proximityDeviation"] = proximityDeviationPIC2;
+  jsonDoc["PIC2"]["touchState"] = touchStatePIC2;
+  jsonDoc["PIC2"]["proximityState"] = proximityStatePIC2;
 
   char message[512];
   serializeJson(jsonDoc, message);

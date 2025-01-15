@@ -26,12 +26,12 @@ void RFIDManager::handleBadgeDetection() {
         }
     } 
     else {
-        String link = "";
-        if (isUIDRegistered(uid, link)) {
+        String action = "";
+        if (isUIDRegistered(uid, action)) {
             Serial.println("Badge déjà enregistré.");
             DynamicJsonDocument actionMessage(512);
             actionMessage["id"] = uid;
-            actionMessage["link"] = link;
+            actionMessage["action"] = action;
 
             String jsonString;
             serializeJson(actionMessage, jsonString);
@@ -89,7 +89,7 @@ void RFIDManager::saveConfiguration(DynamicJsonDocument &doc) {
     }
 }
 
-bool RFIDManager::isUIDRegistered(String uid, String &link) {
+bool RFIDManager::isUIDRegistered(String uid, String &action) {
     if (!SPIFFS.exists(configFile)) return false;
 
     File file = SPIFFS.open(configFile, "r");
@@ -101,7 +101,7 @@ bool RFIDManager::isUIDRegistered(String uid, String &link) {
         JsonArray rfidArray = doc["rfid"].as<JsonArray>();
         for (JsonObject obj : rfidArray) {
             if (obj["cardID"].as<String>() == uid) {
-                link = obj["Link"].as<String>();
+                action = obj["action"].as<String>();
                 return true;
             }
         }
@@ -110,40 +110,39 @@ bool RFIDManager::isUIDRegistered(String uid, String &link) {
 }
 
 void RFIDManager::handleConfigurationMessage(DynamicJsonDocument &doc) {
-    if (doc.containsKey("id") && doc.containsKey("link")) {
-        String cardID = doc["id"];
-        String link = doc["link"];
+    String cardID = doc["id"];
+    String action = doc["action"];
 
-        DynamicJsonDocument configDoc(2048);
-        if (SPIFFS.exists(configFile)) {
-            File file = SPIFFS.open(configFile, "r");
-            if (file) {
-                deserializeJson(configDoc, file);
-                file.close();
-            }
-        } else {
-            configDoc["rfid"] = JsonArray();
+    DynamicJsonDocument configDoc(2048);
+    if (SPIFFS.exists(configFile)) {
+        File file = SPIFFS.open(configFile, "r");
+        if (file) {
+            deserializeJson(configDoc, file);
+            file.close();
         }
-
-        JsonArray rfidArray = configDoc["rfid"].as<JsonArray>();
-        bool found = false;
-        for (JsonObject obj : rfidArray) {
-            if (obj["cardID"].as<String>() == cardID) {
-                obj["Link"] = link;
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            JsonObject newEntry = rfidArray.createNestedObject();
-            newEntry["cardID"] = cardID;
-            newEntry["Link"] = link;
-        }
-
-        saveConfiguration(configDoc);
-        Serial.println("Configuration mise à jour !");
+    } else {
+        configDoc["rfid"] = JsonArray();
     }
+
+    JsonArray rfidArray = configDoc["rfid"].as<JsonArray>();
+    bool found = false;
+    for (JsonObject obj : rfidArray) {
+        if (obj["cardID"].as<String>() == cardID) {
+            obj["action"] = action;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        JsonObject newEntry = rfidArray.createNestedObject();
+        newEntry["cardID"] = cardID;
+        newEntry["action"] = action;
+    }
+
+    saveConfiguration(configDoc);
+    Serial.println("Configuration mise à jour !");
+    
 }
 
 String RFIDManager::formatUID(byte *buffer, byte bufferSize) {
